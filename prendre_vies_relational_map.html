@@ -1,0 +1,783 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Prendre vie(s) — Relational Map</title>
+<style>
+  :root{
+    --bg:#08080a;
+    --thread:#cfcfd2;
+    --node:#e7e7ea;
+    --panel-bg:rgba(10,10,12,0.86);
+    --panel-text:#d8d8dc;
+    --panel-muted:#8b8b90;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;background:var(--bg);width:100%;height:100%;overflow:hidden;}
+  body{
+    font-family:'Iowan Old Style','Georgia',serif;
+    color:var(--panel-text);
+  }
+  #stage{
+    position:relative;
+    width:100vw;
+    height:100vh;
+  }
+  svg{
+    width:100%;
+    height:100%;
+    display:block;
+  }
+  .thread{
+    fill:none;
+    stroke:var(--thread);
+    stroke-linecap:round;
+  }
+  .node-circle{
+    fill:var(--node);
+  }
+  .node-hit{
+    fill:transparent;
+    cursor:grab;
+  }
+  .node-hit:active{cursor:grabbing;}
+
+  #controls{
+    position:absolute;
+    left:50%;
+    bottom:34px;
+    transform:translateX(-50%);
+    display:flex;
+    gap:56px;
+    z-index:5;
+    pointer-events:none;
+  }
+  .slider-group{
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    gap:8px;
+    pointer-events:auto;
+  }
+  .slider-label{
+    font-size:11px;
+    letter-spacing:0.04em;
+    color:var(--panel-muted);
+    text-align:center;
+    line-height:1.3;
+    font-family:'Helvetica Neue',Arial,sans-serif;
+    white-space:pre-line;
+  }
+  input[type=range]{
+    -webkit-appearance:none;
+    appearance:none;
+    width:150px;
+    height:1px;
+    background:rgba(255,255,255,0.18);
+    outline:none;
+  }
+  input[type=range]::-webkit-slider-thumb{
+    -webkit-appearance:none;
+    appearance:none;
+    width:9px;
+    height:9px;
+    border-radius:50%;
+    background:#e7e7ea;
+    cursor:pointer;
+    margin-top:0;
+  }
+  input[type=range]::-moz-range-thumb{
+    width:9px;
+    height:9px;
+    border-radius:50%;
+    background:#e7e7ea;
+    border:none;
+    cursor:pointer;
+  }
+  input[type=range]::-moz-range-track{
+    background:rgba(255,255,255,0.18);
+    height:1px;
+  }
+
+  #title{
+    position:absolute;
+    top:28px;
+    left:32px;
+    z-index:5;
+    max-width:280px;
+    font-family:'Helvetica Neue',Arial,sans-serif;
+  }
+  #title h1{
+    font-family:'Iowan Old Style','Georgia',serif;
+    font-weight:400;
+    font-style:italic;
+    font-size:17px;
+    margin:0 0 6px 0;
+    color:#e7e7ea;
+    letter-spacing:0.01em;
+  }
+  #title p{
+    font-size:11.5px;
+    line-height:1.5;
+    color:var(--panel-muted);
+    margin:0;
+  }
+
+  .label-text{
+    font-family:'Helvetica Neue',Arial,sans-serif;
+    font-size:10px;
+    fill:var(--panel-muted);
+    pointer-events:none;
+    user-select:none;
+  }
+
+  #info-panel{
+    position:absolute;
+    top:50%;
+    transform:translateY(-50%);
+    width:260px;
+    padding:22px 22px 20px 22px;
+    background:var(--panel-bg);
+    border-left:1px solid rgba(255,255,255,0.12);
+    font-family:'Helvetica Neue',Arial,sans-serif;
+    opacity:0;
+    pointer-events:none;
+    transition:opacity 0.4s ease;
+    z-index:6;
+  }
+  #info-panel.visible{
+    opacity:1;
+    pointer-events:auto;
+  }
+  #info-panel.side-right{ right:36px; border-left:1px solid rgba(255,255,255,0.12); border-right:none; }
+  #info-panel.side-left{ left:36px; border-right:1px solid rgba(255,255,255,0.12); border-left:none; }
+
+  #info-name{
+    font-family:'Iowan Old Style','Georgia',serif;
+    font-style:italic;
+    font-size:18px;
+    color:#eee;
+    margin:0 0 12px 0;
+  }
+  #info-agency{
+    font-size:12px;
+    line-height:1.6;
+    color:var(--panel-text);
+    margin:0 0 14px 0;
+  }
+  #info-quote{
+    font-size:12px;
+    line-height:1.5;
+    font-style:italic;
+    color:#bdbdc2;
+    margin:0 0 6px 0;
+    padding-left:10px;
+    border-left:1px solid rgba(255,255,255,0.2);
+  }
+  #info-source{
+    font-size:10.5px;
+    color:var(--panel-muted);
+    margin:0;
+  }
+  #info-close{
+    position:absolute;
+    top:16px;
+    right:18px;
+    font-size:11px;
+    color:var(--panel-muted);
+    cursor:pointer;
+    background:none;
+    border:none;
+    font-family:'Helvetica Neue',Arial,sans-serif;
+  }
+  #info-close:hover{ color:#e7e7ea; }
+</style>
+</head>
+<body>
+
+<div id="stage">
+  <svg id="svg" xmlns="http://www.w3.org/2000/svg"></svg>
+
+  <div id="title">
+    <h1>Prendre vie(s) — relational assemblage</h1>
+    <p>All of these relations were already here. The method changes what becomes perceptible.</p>
+  </div>
+
+  <div id="controls">
+    <div class="slider-group">
+      <div class="slider-label">General View</div>
+      <input type="range" id="sliderA" min="0" max="100" value="100">
+    </div>
+    <div class="slider-group">
+      <div class="slider-label">Scaling / Rescaling&#10;Temporal Rescaling</div>
+      <input type="range" id="sliderB" min="0" max="100" value="25">
+    </div>
+    <div class="slider-group">
+      <div class="slider-label">Focusing / Unfocusing</div>
+      <input type="range" id="sliderC" min="0" max="100" value="12">
+    </div>
+  </div>
+
+  <div id="info-panel">
+    <button id="info-close">close</button>
+    <h3 id="info-name"></h3>
+    <p id="info-agency"></p>
+    <p id="info-quote" style="display:none;"></p>
+    <p id="info-source" style="display:none;"></p>
+  </div>
+</div>
+
+<script>
+/* =========================================================
+   TUNABLE PARAMETERS
+   ========================================================= */
+const SETTINGS = {
+  knotRadius: 130,          // radius of the compact tangled core
+  nodeRadius: 4.2,          // uniform node size
+  baseLineOpacity: 0.14,    // base opacity multiplier for threads
+  layerOpacity: {           // initial opacity per layer (overridden by sliders live)
+    A: 1.0,
+    B: 0.25,
+    C: 0.12
+  },
+  layerZ: {                 // conceptual depth per layer (0 = closest)
+    A: 0,
+    B: 60,
+    C: 120
+  },
+  parallaxStrength: 0.05,   // subtle cursor parallax, scaled by depth
+  springStrength: 0.02,     // pull toward home position
+  dampening: 0.86,          // velocity damping
+  neighbourDragInfluence: 0.14, // how much directly connected nodes get tugged
+  neighbourFalloff: 0.4,    // influence falloff for 2nd degree neighbours
+  returnSpeed: 0.06,        // spring return speed after deselect
+  selectedRelationOpacity: 0.85,
+  unrelatedRelationOpacityMul: 0.35, // multiply unrelated lines when a node is selected
+  dragThreshold: 5          // px movement to count as drag vs click
+};
+
+/* =========================================================
+   DATA: actants, layers, relations, agency, quotes
+   ========================================================= */
+
+const ACTANTS = [
+  "Viewer","Cemetery","Graves","Grains","Computer",
+  "Pixels","Flow Lenia","Rules","Human Programming",
+  "Processor","Screen","Software","Electricity",
+  "Cables","Sockets","Gallery Infrastructure"
+];
+
+const LAYER_ACTANTS = {
+  A: ["Viewer","Cemetery","Graves","Grains","Computer"],
+  B: ["Viewer","Cemetery","Grains","Pixels","Flow Lenia","Rules","Human Programming",
+      "Computer","Processor","Screen","Software","Electricity"],
+  C: ["Cemetery","Grains","Flow Lenia","Computer","Processor","Screen","Electricity",
+      "Cables","Sockets","Gallery Infrastructure"]
+};
+
+const RELATIONS = {
+  A: [
+    ["Viewer","Cemetery"], ["Viewer","Grains"], ["Viewer","Computer"],
+    ["Cemetery","Graves"], ["Cemetery","Grains"], ["Cemetery","Computer"]
+  ],
+  B: [
+    ["Viewer","Cemetery"], ["Viewer","Grains"], ["Viewer","Screen"],
+    ["Cemetery","Grains"], ["Cemetery","Pixels"], ["Cemetery","Flow Lenia"],
+    ["Grains","Pixels"], ["Grains","Flow Lenia"],
+    ["Flow Lenia","Rules"], ["Flow Lenia","Human Programming"], ["Flow Lenia","Software"],
+    ["Flow Lenia","Processor"], ["Flow Lenia","Computer"],
+    ["Rules","Human Programming"], ["Rules","Software"], ["Human Programming","Software"],
+    ["Computer","Processor"], ["Computer","Screen"], ["Computer","Software"], ["Computer","Electricity"],
+    ["Processor","Software"], ["Processor","Screen"],
+    ["Screen","Pixels"],
+    ["Electricity","Processor"], ["Electricity","Screen"]
+  ],
+  C: [
+    ["Electricity","Computer"], ["Electricity","Processor"], ["Electricity","Screen"],
+    ["Electricity","Flow Lenia"], ["Electricity","Grains"], ["Electricity","Cables"],
+    ["Cables","Sockets"], ["Sockets","Gallery Infrastructure"],
+    ["Electricity","Gallery Infrastructure"], ["Computer","Gallery Infrastructure"],
+    ["Screen","Gallery Infrastructure"]
+  ]
+};
+
+const AGENCY = {
+  "Viewer": "Observes the system's transformations and encounters different processes depending on the duration and mode of attention. The viewer does not control the assemblage but participates in how its activity becomes perceptible.",
+  "Cemetery": "Provides the photographic and cultural field within which the artificial system operates. It carries the visual meaning of death while also becoming an environment for changing computational behaviour.",
+  "Graves": "Structure the cemetery image through repeated forms and religious signs. They make the cultural meaning of death immediately legible in the first encounter with the artwork.",
+  "Grains": "Act as elementary moving visual components. Their local interactions produce gathering, separation, movement and reorganisation rather than behaving as fixed photographic pixels.",
+  "Pixels": "Provide the visual material of the image and connect computation to what becomes visible on the screen.",
+  "Flow Lenia": "Produces continuously changing artificial life patterns through interactions inside programmed conditions. Its behaviour unfolds without every individual movement being authored in advance.",
+  "Rules": "Define conditions and constraints within which behaviour can emerge without manually specifying every resulting state.",
+  "Human Programming": "Frames the possibilities of the artificial system by constructing its initial rules and constraints, while not determining each individual movement that follows.",
+  "Computer": "Physically performs the artwork in real time. It calculates and sustains the processes that make the artificial environment and its visible transformations possible.",
+  "Processor": "Continuously calculates new states of the system and materially participates in the production of real time behaviour.",
+  "Screen": "Makes computational activity perceptible by translating changing states into a visible image.",
+  "Software": "Runs the computational processes, rules and interactions through which Flow Lenia operates.",
+  "Electricity": "Provides the continuous material condition that allows computation, display and artificial activity to continue. When this flow stops, this configuration of the assemblage stops with it.",
+  "Cables": "Carry electrical energy through an infrastructural layer that usually disappears from the viewer's attention.",
+  "Sockets": "Connect the installation to the larger electrical infrastructure of the exhibition space.",
+  "Gallery Infrastructure": "Provides the less visible technical and material conditions that allow the installation to operate as a continuous system."
+};
+
+// quotations used sparingly, conceptually relevant
+const QUOTES = {
+  "Flow Lenia": { text: "behavioral dimension", source: "Samuel Bianchini, Prendre vie(s), 2025" },
+  "Grains": { text: "force not quite human", source: "Jane Bennett, Vibrant Matter, 2010" },
+  "Cemetery": { text: "living environment", source: "Samuel Bianchini, Prendre vie(s), 2025" },
+  "Electricity": { text: "give voice to a thing-power", source: "Jane Bennett, Vibrant Matter, 2010" }
+};
+
+/* =========================================================
+   SETUP
+   ========================================================= */
+
+const svg = document.getElementById('svg');
+const stage = document.getElementById('stage');
+let W = window.innerWidth, H = window.innerHeight;
+const NS = "http://www.w3.org/2000/svg";
+
+// unique edges, tagged with which layers they belong to
+const edgeMap = new Map();
+function edgeKey(a,b){ return [a,b].sort().join('|'); }
+Object.keys(RELATIONS).forEach(layer=>{
+  RELATIONS[layer].forEach(([a,b])=>{
+    const k = edgeKey(a,b);
+    if(!edgeMap.has(k)) edgeMap.set(k, {a,b,layers:new Set()});
+    edgeMap.get(k).layers.add(layer);
+  });
+});
+const EDGES = Array.from(edgeMap.values());
+
+// node -> set of layers it belongs to
+const nodeLayers = {};
+ACTANTS.forEach(n=>nodeLayers[n]=new Set());
+Object.keys(LAYER_ACTANTS).forEach(layer=>{
+  LAYER_ACTANTS[layer].forEach(n=>nodeLayers[n].add(layer));
+});
+
+// node -> primary layer (closest / first) for depth assignment
+function primaryLayer(n){
+  if(nodeLayers[n].has('A')) return 'A';
+  if(nodeLayers[n].has('B')) return 'B';
+  return 'C';
+}
+
+// initial compact tangled positions — deterministic pseudo-random by name
+function seedRandom(str){
+  let h = 0;
+  for(let i=0;i<str.length;i++){ h = Math.imul(31,h) + str.charCodeAt(i) | 0; }
+  return function(){
+    h = Math.imul(h ^ (h >>> 15), 1 | h);
+    h = (h + Math.imul(h ^ (h >>> 7), 61 | h)) ^ h;
+    return ((h ^ (h >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+const nodes = {};
+ACTANTS.forEach((name)=>{
+  const rnd = seedRandom(name);
+  const angle = rnd() * Math.PI * 2;
+  const r = SETTINGS.knotRadius * (0.15 + rnd()*0.85);
+  const homeX = Math.cos(angle) * r;
+  const homeY = Math.sin(angle) * r * 0.82; // slightly flattened, organic
+  const layer = primaryLayer(name);
+  nodes[name] = {
+    name, layer,
+    homeX, homeY,
+    x: homeX, y: homeY,
+    vx:0, vy:0,
+    dragging:false,
+    dragOffsetX:0, dragOffsetY:0,
+    selected:false,
+    displaced:false
+  };
+});
+
+/* =========================================================
+   BUILD SVG STRUCTURE
+   ========================================================= */
+
+svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+
+const gRoot = document.createElementNS(NS,'g');
+svg.appendChild(gRoot);
+
+const gEdges = document.createElementNS(NS,'g');
+gRoot.appendChild(gEdges);
+const gNodes = document.createElementNS(NS,'g');
+gRoot.appendChild(gNodes);
+const gLabels = document.createElementNS(NS,'g');
+gRoot.appendChild(gLabels);
+
+const edgeEls = EDGES.map(edge=>{
+  const path = document.createElementNS(NS,'path');
+  path.setAttribute('class','thread');
+  gEdges.appendChild(path);
+  return {edge, path};
+});
+
+const nodeEls = {};
+ACTANTS.forEach(name=>{
+  const g = document.createElementNS(NS,'g');
+  g.setAttribute('data-name', name);
+
+  const circle = document.createElementNS(NS,'circle');
+  circle.setAttribute('class','node-circle');
+  circle.setAttribute('r', SETTINGS.nodeRadius);
+  g.appendChild(circle);
+
+  const hit = document.createElementNS(NS,'circle');
+  hit.setAttribute('class','node-hit');
+  hit.setAttribute('r', SETTINGS.nodeRadius + 12);
+  g.appendChild(hit);
+
+  gNodes.appendChild(g);
+
+  const label = document.createElementNS(NS,'text');
+  label.setAttribute('class','label-text');
+  label.textContent = name;
+  label.setAttribute('opacity', 0);
+  gLabels.appendChild(label);
+
+  nodeEls[name] = {g, circle, hit, label};
+});
+
+/* =========================================================
+   INTERACTION STATE
+   ========================================================= */
+
+let sliderVals = { A:1.0, B:0.25, C:0.12 };
+let selectedNode = null;
+let hoveredNode = null;
+let pointer = {x:0,y:0};
+let cursorNorm = {x:0,y:0}; // -1..1 relative to center, for parallax
+
+const infoPanel = document.getElementById('info-panel');
+const infoName = document.getElementById('info-name');
+const infoAgency = document.getElementById('info-agency');
+const infoQuote = document.getElementById('info-quote');
+const infoSource = document.getElementById('info-source');
+const infoClose = document.getElementById('info-close');
+
+function centerX(){ return W/2; }
+function centerY(){ return H/2 - 20; }
+
+/* =========================================================
+   NEIGHBOUR MAP (for drag propagation)
+   ========================================================= */
+
+const neighbours = {};
+ACTANTS.forEach(n=>neighbours[n]=new Set());
+EDGES.forEach(({a,b})=>{
+  neighbours[a].add(b);
+  neighbours[b].add(a);
+});
+
+/* =========================================================
+   DRAG HANDLING
+   ========================================================= */
+
+let dragState = null;
+
+function toStageCoords(evt){
+  const rect = svg.getBoundingClientRect();
+  return {
+    x: evt.clientX - rect.left - centerX(),
+    y: evt.clientY - rect.top - centerY()
+  };
+}
+
+ACTANTS.forEach(name=>{
+  const {hit} = nodeEls[name];
+  hit.addEventListener('pointerdown', (e)=>{
+    e.preventDefault();
+    const p = toStageCoords(e);
+    const node = nodes[name];
+    dragState = {
+      name,
+      startX: p.x, startY: p.y,
+      offsetX: p.x - node.x, offsetY: p.y - node.y,
+      moved:false
+    };
+    hit.setPointerCapture(e.pointerId);
+  });
+  hit.addEventListener('pointerenter', ()=>{
+    hoveredNode = name;
+  });
+  hit.addEventListener('pointerleave', ()=>{
+    if(hoveredNode === name) hoveredNode = null;
+  });
+});
+
+svg.addEventListener('pointermove', (e)=>{
+  const p = toStageCoords(e);
+  pointer = p;
+  cursorNorm.x = Math.max(-1, Math.min(1, p.x / (W*0.5)));
+  cursorNorm.y = Math.max(-1, Math.min(1, p.y / (H*0.5)));
+
+  if(dragState){
+    const node = nodes[dragState.name];
+    const nx = p.x - dragState.offsetX;
+    const ny = p.y - dragState.offsetY;
+    const dx = nx - dragState.startX + dragState.offsetX - (node.homeX - dragState.offsetX + dragState.offsetX);
+    const distMoved = Math.hypot(p.x - dragState.startX, p.y - dragState.startY);
+    if(distMoved > SETTINGS.dragThreshold) dragState.moved = true;
+
+    node.x = nx;
+    node.y = ny;
+    node.vx = 0; node.vy = 0;
+    node.dragging = true;
+    node.displaced = true;
+
+    // propagate to neighbours
+    const dxMove = nx - node.homeX;
+    const dyMove = ny - node.homeY;
+    neighbours[dragState.name].forEach(nb=>{
+      const nnode = nodes[nb];
+      if(nnode.dragging) return;
+      nnode._pull = nnode._pull || {x:0,y:0};
+      nnode._pull.x = dxMove * SETTINGS.neighbourDragInfluence;
+      nnode._pull.y = dyMove * SETTINGS.neighbourDragInfluence;
+    });
+  }
+});
+
+window.addEventListener('pointerup', (e)=>{
+  if(dragState){
+    const node = nodes[dragState.name];
+    node.dragging = false;
+    if(!dragState.moved){
+      selectNode(dragState.name);
+    } else {
+      // deselect gradually returns unless clicked-selected afterward
+      if(selectedNode !== dragState.name){
+        node.displaced = true; // will spring back since not selected home pull already active
+      }
+    }
+    dragState = null;
+  }
+});
+
+/* =========================================================
+   SELECTION
+   ========================================================= */
+
+function selectNode(name){
+  if(selectedNode === name){
+    deselect();
+    return;
+  }
+  selectedNode = name;
+  showInfoPanel(name);
+}
+
+function deselect(){
+  selectedNode = null;
+  infoPanel.classList.remove('visible');
+}
+
+infoClose.addEventListener('click', deselect);
+
+svg.addEventListener('pointerdown', (e)=>{
+  if(e.target === svg){
+    deselect();
+  }
+});
+
+function showInfoPanel(name){
+  infoName.textContent = name;
+  infoAgency.textContent = AGENCY[name] || "";
+  const q = QUOTES[name];
+  if(q){
+    infoQuote.style.display = 'block';
+    infoSource.style.display = 'block';
+    infoQuote.textContent = `\u201C${q.text}\u201D`;
+    infoSource.textContent = q.source;
+  } else {
+    infoQuote.style.display = 'none';
+    infoSource.style.display = 'none';
+  }
+
+  const node = nodes[name];
+  const onRight = node.x >= 0;
+  infoPanel.classList.remove('side-left','side-right');
+  infoPanel.classList.add(onRight ? 'side-left' : 'side-right');
+
+  infoPanel.classList.add('visible');
+}
+
+/* =========================================================
+   SLIDERS
+   ========================================================= */
+
+const sliderA = document.getElementById('sliderA');
+const sliderB = document.getElementById('sliderB');
+const sliderC = document.getElementById('sliderC');
+
+function updateSliders(){
+  sliderVals.A = sliderA.value / 100;
+  sliderVals.B = sliderB.value / 100;
+  sliderVals.C = sliderC.value / 100;
+}
+sliderA.addEventListener('input', updateSliders);
+sliderB.addEventListener('input', updateSliders);
+sliderC.addEventListener('input', updateSliders);
+updateSliders();
+
+/* =========================================================
+   ANIMATION LOOP
+   ========================================================= */
+
+function edgeOpacity(edge){
+  // max opacity across the layers this edge belongs to, weighted by slider
+  let val = 0;
+  edge.layers.forEach(l=>{
+    val = Math.max(val, sliderVals[l]);
+  });
+  let op = SETTINGS.baseLineOpacity + val * 0.55;
+
+  if(selectedNode){
+    const isRelated = edge.a === selectedNode || edge.b === selectedNode;
+    op = isRelated ? Math.max(op, SETTINGS.selectedRelationOpacity) : op * SETTINGS.unrelatedRelationOpacityMul;
+  }
+  return Math.min(1, op);
+}
+
+function nodeOpacity(name){
+  const node = nodes[name];
+  let val = 0;
+  nodeLayers[name].forEach(l=>{
+    val = Math.max(val, sliderVals[l]);
+  });
+  let op = 0.25 + val * 0.75;
+  if(selectedNode && selectedNode !== name){
+    const related = neighbours[selectedNode].has(name);
+    if(!related) op *= 0.5;
+  }
+  return Math.min(1, op);
+}
+
+function depthFor(name){
+  // depth influenced by which layer is most "active" for this node right now
+  let bestLayer = null, bestVal = -1;
+  nodeLayers[name].forEach(l=>{
+    if(sliderVals[l] > bestVal){ bestVal = sliderVals[l]; bestLayer = l; }
+  });
+  return SETTINGS.layerZ[bestLayer] ?? 0;
+}
+
+function step(){
+  // physics update
+  ACTANTS.forEach(name=>{
+    const node = nodes[name];
+    if(node.dragging) return;
+
+    let targetX = node.homeX;
+    let targetY = node.homeY;
+
+    if(node._pull){
+      targetX += node._pull.x;
+      targetY += node._pull.y;
+    }
+
+    const springK = (selectedNode === name || node.displaced) ? SETTINGS.returnSpeed : SETTINGS.springStrength;
+
+    const dx = targetX - node.x;
+    const dy = targetY - node.y;
+    node.vx = (node.vx + dx * springK) * SETTINGS.dampening;
+    node.vy = (node.vy + dy * springK) * SETTINGS.dampening;
+    node.x += node.vx;
+    node.y += node.vy;
+
+    if(node._pull){
+      // decay pull influence each frame so it doesn't lock
+      node._pull.x *= 0.9;
+      node._pull.y *= 0.9;
+      if(Math.abs(node._pull.x) < 0.01 && Math.abs(node._pull.y) < 0.01) node._pull = null;
+    }
+
+    if(!node.dragging && Math.abs(dx) < 0.3 && Math.abs(dy) < 0.3 && !node._pull){
+      node.displaced = false;
+    }
+  });
+
+  render();
+  requestAnimationFrame(step);
+}
+
+function render(){
+  const cx = centerX(), cy = centerY();
+
+  // parallax offset per depth
+  function screenPos(node){
+    const depth = depthFor(node.name);
+    const parallaxX = -cursorNorm.x * depth * SETTINGS.parallaxStrength;
+    const parallaxY = -cursorNorm.y * depth * SETTINGS.parallaxStrength;
+    return {
+      x: cx + node.x + parallaxX,
+      y: cy + node.y + parallaxY
+    };
+  }
+
+  const screenCache = {};
+  ACTANTS.forEach(name=>{
+    screenCache[name] = screenPos(nodes[name]);
+  });
+
+  edgeEls.forEach(({edge,path})=>{
+    const pa = screenCache[edge.a];
+    const pb = screenCache[edge.b];
+    // gentle curve for organic thread feel
+    const mx = (pa.x+pb.x)/2;
+    const my = (pa.y+pb.y)/2;
+    const dx = pb.x - pa.x, dy = pb.y - pa.y;
+    const curveOffset = (seedRandom(edge.a+edge.b)() - 0.5) * 18;
+    const nx = -dy, ny = dx;
+    const len = Math.hypot(nx,ny) || 1;
+    const cxp = mx + (nx/len) * curveOffset;
+    const cyp = my + (ny/len) * curveOffset;
+
+    path.setAttribute('d', `M ${pa.x} ${pa.y} Q ${cxp} ${cyp} ${pb.x} ${pb.y}`);
+    path.setAttribute('stroke-width', 0.7);
+    path.setAttribute('opacity', edgeOpacity(edge));
+  });
+
+  ACTANTS.forEach(name=>{
+    const {g, label} = nodeEls[name];
+    const p = screenCache[name];
+    g.setAttribute('transform', `translate(${p.x},${p.y})`);
+    const op = nodeOpacity(name);
+    g.setAttribute('opacity', op);
+
+    const showLabel = (selectedNode === name) || (hoveredNode === name);
+    label.setAttribute('x', p.x + 9);
+    label.setAttribute('y', p.y + 3);
+    label.setAttribute('opacity', showLabel ? Math.min(1, op+0.3) : 0);
+
+    // subtle emphasis on hover
+    const circle = nodeEls[name].circle;
+    const scale = (hoveredNode === name && !dragState) ? 1.6 : (selectedNode === name ? 1.5 : 1);
+    circle.setAttribute('r', SETTINGS.nodeRadius * scale);
+  });
+
+  // reposition info panel near its node vertically without covering knot much (kept centered via CSS)
+}
+
+/* =========================================================
+   RESIZE
+   ========================================================= */
+
+function handleResize(){
+  W = window.innerWidth;
+  H = window.innerHeight;
+  svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+}
+window.addEventListener('resize', handleResize);
+handleResize();
+
+requestAnimationFrame(step);
+</script>
+
+</body>
+</html>
